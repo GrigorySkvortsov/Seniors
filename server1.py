@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS ChatLog (
 ''')
 conn.commit()
 
-
 # Логгеры
 def log_auth(login, event):
     ts = str(datetime.now())
@@ -48,13 +47,11 @@ def log_auth(login, event):
     cursor.execute('INSERT INTO AuthLog (login, event, timestamp) VALUES (?, ?, ?)', (login, event, ts))
     conn.commit()
 
-
 def log_chat(sender, receiver, message):
     ts = str(datetime.now())
     print(f"[CHAT] {sender} -> {receiver} | Сообщение: {message} | Время: {ts}")
     cursor.execute('INSERT INTO ChatLog (sender, receiver, message, timestamp) VALUES (?, ?, ?, ?)', (sender, receiver, message, ts))
     conn.commit()
-
 
 # Основной обработчик клиента
 async def handle_client(websocket):
@@ -115,12 +112,37 @@ async def handle_client(websocket):
                     await websocket.send(json.dumps({"status": "error", "message": "Receiver not online"}))
                     print(f"[WARNING] Получатель {receiver} не в сети")
 
+            elif command == "get_history":
+                if not user:
+                    await websocket.send(json.dumps({"status": "error", "message": "Not authorized"}))
+                    continue
+
+                cursor.execute('''
+                    SELECT sender, receiver, message, timestamp FROM ChatLog
+                    WHERE sender = ? OR receiver = ?
+                    ORDER BY timestamp
+                ''', (user, user))
+                rows = cursor.fetchall()
+
+                history = {}
+                for sender, receiver, message, timestamp in rows:
+                    other = receiver if sender == user else sender
+                    history.setdefault(other, []).append({
+                        "from": sender,
+                        "message": message,
+                        "timestamp": timestamp
+                    })
+
+                await websocket.send(json.dumps({
+                    "command": "chat_history",
+                    "history": history
+                }))
+
     except websockets.exceptions.ConnectionClosed:
         print(f"[DISCONNECT] Клиент отключился: {user}")
         if user:
             USERS.pop(user, None)
             log_auth(user, "disconnected")
-
 
 # Запуск сервера
 async def main():

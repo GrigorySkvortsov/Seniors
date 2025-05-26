@@ -3,21 +3,22 @@ import websockets
 import json
 import threading
 import tkinter as tk
-from tkinter import scrolledtext, messagebox, ttk
+from tkinter import ttk, messagebox, scrolledtext
 from datetime import datetime
 
 SERVER_URI = "ws://localhost:6789"
 
-
 class ChatClient:
     def __init__(self, root):
         self.root = root
-        self.root.title("WebSocket Чат")
+        self.root.title("WebSocket Чат с вкладками")
+
         self.ws = None
         self.login = ""
-
         self.tabs = {}
+        self.text_areas = {}
         self.loop = asyncio.new_event_loop()
+
         threading.Thread(target=self.start_loop, daemon=True).start()
 
         # Интерфейс
@@ -35,6 +36,7 @@ class ChatClient:
         self.to_entry = tk.Entry(root)
         self.to_entry.pack()
         self.to_entry.insert(0, "Кому (логин)")
+
         self.msg_entry = tk.Entry(root)
         self.msg_entry.pack()
         self.msg_entry.insert(0, "Введите сообщение")
@@ -61,16 +63,27 @@ class ChatClient:
             text_area = scrolledtext.ScrolledText(frame, state='disabled', width=60, height=20)
             text_area.pack(expand=True, fill='both')
             self.notebook.add(frame, text=user)
-            self.tabs[user] = text_area
+            self.tabs[user] = frame
+            self.text_areas[user] = text_area
             self.log_console("SYSTEM", f"Создана вкладка для чата с {user}")
 
     def write_message(self, chat_with, who, message):
         self.create_chat_tab(chat_with)
-        area = self.tabs[chat_with]
+        area = self.text_areas[chat_with]
         area.config(state='normal')
         area.insert(tk.END, f"{who}: {message}\n")
         area.see(tk.END)
         area.config(state='disabled')
+
+    def clear_all_tabs(self):
+        self.log_console("SYSTEM", "Очистка всех вкладок и чатов.")
+        for user, frame in list(self.tabs.items()):
+            try:
+                self.notebook.forget(frame)
+            except Exception as e:
+                self.log_console("ERROR", f"Не удалось удалить вкладку {user}: {e}")
+        self.tabs.clear()
+        self.text_areas.clear()
 
     async def connect(self):
         try:
@@ -88,10 +101,22 @@ class ChatClient:
                     sender = data["from"]
                     self.write_message(sender, sender, data["message"])
                     self.log_console("RECEIVE", f"{sender} → {self.login}: {data['message']}")
+                elif data.get("command") == "chat_history":
+                    self.load_history(data.get("history", {}))
                 elif "status" in data:
                     self.handle_status(data)
         except websockets.ConnectionClosed:
             self.log_console("SYSTEM", "Соединение с сервером закрыто.")
+
+    def load_history(self, history_dict):
+        self.log_console("HISTORY", f"Загружается история чатов ({len(history_dict)} диалогов)...")
+        for partner, messages in history_dict.items():
+            self.create_chat_tab(partner)
+            for msg in messages:
+                sender = msg["from"]
+                message = msg["message"]
+                self.write_message(partner, sender, message)
+        self.log_console("HISTORY", "История успешно загружена.")
 
     def handle_status(self, data):
         status = data.get("status")
@@ -100,8 +125,11 @@ class ChatClient:
             self.log_console("INFO", f"Пользователь {self.login} зарегистрирован.")
         elif status == "logged_in":
             self.log_console("INFO", f"Пользователь {self.login} вошёл в систему.")
+            self.clear_all_tabs()
+            self.send_json({"command": "get_history"})
         elif status == "logged_out":
             self.log_console("INFO", f"Пользователь {self.login} вышел.")
+            self.clear_all_tabs()
         elif status == "sent":
             self.log_console("INFO", "Сообщение отправлено.")
         elif status == "error":
@@ -153,8 +181,8 @@ class ChatClient:
 
     def logout(self):
         self.send_json({"command": "logout"})
-        self.log_console("ACTION", f"Пользователь {self.login} вышел.")
-
+        self.clear_all_tabs()
+        self.log_console("ACTION", f"Пользователь {self.login} вышел из приложения.")
 
 # Запуск клиента
 if __name__ == "__main__":

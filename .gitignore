@@ -1,1 +1,4 @@
 /chat.db
+.venv
+venv/
+.idea/
