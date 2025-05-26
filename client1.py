@@ -35,7 +35,6 @@ class ChatClient:
         self.to_entry = tk.Entry(root)
         self.to_entry.pack()
         self.to_entry.insert(0, "Кому (логин)")
-
         self.msg_entry = tk.Entry(root)
         self.msg_entry.pack()
         self.msg_entry.insert(0, "Введите сообщение")
