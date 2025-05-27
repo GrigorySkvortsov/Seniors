@@ -21,6 +21,9 @@ class ChatClient:
 
         threading.Thread(target=self.start_loop, daemon=True).start()
 
+        self.status_label = tk.Label(root, text="Вы не авторизованы", fg="blue")
+        self.status_label.pack(pady=(0, 5))
+
         # Интерфейс
         self.login_entry = tk.Entry(root)
         self.login_entry.pack()
@@ -30,24 +33,28 @@ class ChatClient:
         self.password_entry.pack()
         self.password_entry.insert(0, "Пароль")
 
-        tk.Button(root, text="Зарегистрироваться", command=self.register).pack()
-        tk.Button(root, text="Войти", command=self.login_user).pack()
+        self.register_btn = tk.Button(root, text="Зарегистрироваться", command=self.register)
+        self.register_btn.pack(pady=2)
+
+        self.login_btn = tk.Button(root, text="Войти", command=self.login_user)
+        self.login_btn.pack(pady=(0, 5))
 
         self.to_entry = tk.Entry(root)
-        self.to_entry.pack()
         self.to_entry.insert(0, "Кому (логин)")
 
         self.msg_entry = tk.Entry(root)
-        self.msg_entry.pack()
         self.msg_entry.insert(0, "Введите сообщение")
 
-        tk.Button(root, text="Отправить", command=self.send_message).pack()
-        tk.Button(root, text="Выйти", command=self.logout).pack()
+        self.send_btn = tk.Button(root, text="Отправить", command=self.send_message)
+
+        self.logout_btn = tk.Button(root, text="Выйти", command=self.logout)
 
         self.notebook = ttk.Notebook(root)
-        self.notebook.pack(fill='both', expand=True)
+        self.notebook.bind("<<NotebookTabChanged>>", self.on_tab_changed)
 
         asyncio.run_coroutine_threadsafe(self.connect(), self.loop)
+
+        self.set_authenticated(False)
 
     def start_loop(self):
         asyncio.set_event_loop(self.loop)
@@ -84,6 +91,41 @@ class ChatClient:
                 self.log_console("ERROR", f"Не удалось удалить вкладку {user}: {e}")
         self.tabs.clear()
         self.text_areas.clear()
+
+    def set_authenticated(self, status: bool):
+        if status:
+            self.login_entry.pack_forget()
+            self.password_entry.pack_forget()
+            self.register_btn.pack_forget()
+            self.login_btn.pack_forget()
+
+            self.to_entry.pack()
+            self.msg_entry.pack()
+            self.send_btn.pack()
+            self.logout_btn.pack(pady=(5, 5))
+            self.notebook.pack(fill='both', expand=True)
+
+            self.status_label.config(text=f"Вы вошли как: {self.login}", fg="green")
+        else:
+            self.to_entry.pack_forget()
+            self.msg_entry.pack_forget()
+            self.send_btn.pack_forget()
+            self.logout_btn.pack_forget()
+            self.notebook.pack_forget()
+
+            self.login_entry.pack()
+            self.password_entry.pack()
+            self.register_btn.pack(pady=2)
+            self.login_btn.pack(pady=(0, 5))
+
+            self.status_label.config(text="Вы не авторизованы", fg="blue")
+
+    def on_tab_changed(self, event):
+        selected_index = self.notebook.index(self.notebook.select())
+        tab_text = self.notebook.tab(selected_index, "text")
+        self.to_entry.delete(0, tk.END)
+        self.to_entry.insert(0, tab_text)
+        self.log_console("SYSTEM", f"Выбрана вкладка: {tab_text} → установлено в поле 'Кому'")
 
     async def connect(self):
         try:
@@ -126,10 +168,13 @@ class ChatClient:
         elif status == "logged_in":
             self.log_console("INFO", f"Пользователь {self.login} вошёл в систему.")
             self.clear_all_tabs()
+            self.set_authenticated(True)
             self.send_json({"command": "get_history"})
         elif status == "logged_out":
             self.log_console("INFO", f"Пользователь {self.login} вышел.")
             self.clear_all_tabs()
+            self.set_authenticated(False)
+            self.login = ""
         elif status == "sent":
             self.log_console("INFO", "Сообщение отправлено.")
         elif status == "error":
@@ -182,7 +227,9 @@ class ChatClient:
     def logout(self):
         self.send_json({"command": "logout"})
         self.clear_all_tabs()
+        self.set_authenticated(False)
         self.log_console("ACTION", f"Пользователь {self.login} вышел из приложения.")
+        self.login = ""
 
 # Запуск клиента
 if __name__ == "__main__":
