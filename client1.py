@@ -8,6 +8,7 @@ from datetime import datetime
 
 SERVER_URI = "ws://localhost:6789"
 
+
 class ChatClient:
     def __init__(self, root):
         self.root = root
@@ -261,6 +262,7 @@ class ChatClient:
         self.set_authenticated(False)
         self.log_console("ACTION", f"Пользователь {self.login} вышел из приложения.")
         self.login = ""
+
 
 # Запуск клиента
 if __name__ == "__main__":
