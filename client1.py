@@ -172,7 +172,8 @@ class ChatClient:
                 if "from" in data and "message" in data:
                     sender = data["from"]
                     msg = data["message"]
-                    timestamp = data.get("timestamp")
+                    # timestamp = data.get("timestamp")
+                    timestamp = datetime.now().isoformat()
                     if sender != self.login:
                         self.write_message(sender, sender, msg, timestamp)
                     self.log_console("RECEIVE", f"{sender} → {self.login}: {msg}")
