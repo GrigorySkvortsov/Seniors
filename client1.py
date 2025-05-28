@@ -59,6 +59,8 @@ class ChatClient:
 
         self.set_authenticated(False)
 
+        self.root.bind('<Return>', lambda a: self.enter_btn_command())
+
     def start_loop(self):
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
@@ -171,7 +173,8 @@ class ChatClient:
                     sender = data["from"]
                     msg = data["message"]
                     timestamp = data.get("timestamp")
-                    self.write_message(sender, sender, msg, timestamp)
+                    if sender != self.login:
+                        self.write_message(sender, sender, msg, timestamp)
                     self.log_console("RECEIVE", f"{sender} → {self.login}: {msg}")
                 elif data.get("command") == "chat_history":
                     self.load_history(data.get("history", {}))
@@ -255,6 +258,7 @@ class ChatClient:
         now = datetime.now().isoformat()
         self.write_message(to_user, self.login, message, now)
         self.log_console("ACTION", f"{self.login} → {to_user}: {message}")
+        self.msg_entry.delete(0, tk.END)
 
     def logout(self):
         self.send_json({"command": "logout"})
@@ -262,6 +266,12 @@ class ChatClient:
         self.set_authenticated(False)
         self.log_console("ACTION", f"Пользователь {self.login} вышел из приложения.")
         self.login = ""
+
+    def enter_btn_command(self):
+        if self.status_label['text'] == "Вы не авторизованы":
+            self.login_user()
+        else:
+            self.send_message()
 
 
 # Запуск клиента
